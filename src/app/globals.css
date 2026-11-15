@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+/* Tokens: see design-system/tauhid-ibrahim/pages/home.md (all text pairs checked >= 4.5:1). */
+@theme {
+  --color-ink: #0f1b2d;
+  --color-ink-2: #16243a;
+  --color-ink-line: #2a3a54;
+  --color-ledger: #f3f0e6;
+  --color-paper: #faf8f2;
+  --color-rule: #d9d3c3;
+  --color-graphite: #2e3644;
+  --color-muted: #5a6372;
+  --color-emerald: #1e6a50;
+  --color-emerald-dark: #17533f;
+  --color-emerald-bright: #5db08f;
+  --color-gold: #c2a066;
+  --color-gold-deep: #7d6230;
+  --color-loss: #a4483a;
+  --color-loss-bright: #e08a78;
+  --color-on-ink: #ece8dd;
+  --color-on-ink-muted: #a3adbd;
+
+  --font-display: var(--font-bodoni), "Didot", "Bodoni 72", Georgia, serif;
+  --font-sans: var(--font-plex-sans), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Mono", monospace;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-ledger);
+    color: var(--color-graphite);
+    font-family: var(--font-sans);
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-emerald);
+    color: var(--color-ledger);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-emerald);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .on-ink :focus-visible {
+    outline-color: var(--color-gold);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.04;
+  }
+
+  /* Accounting convention: a total sits on a single rule and closes with a double rule. */
+  .total-rule {
+    border-top: 1px solid currentColor;
+    border-bottom: 3px double currentColor;
+  }
+
+  /* Faint ledger ruling for the hero background. */
+  .ledger-ruling {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 31px,
+      rgb(236 232 221 / 0.045) 31px,
+      rgb(236 232 221 / 0.045) 32px
+    );
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.625rem 1.125rem;
+    border-radius: 2px;
+    font-weight: 500;
+    font-size: 0.9375rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition:
+      background-color 180ms var(--ease-out-quart),
+      color 180ms var(--ease-out-quart),
+      border-color 180ms var(--ease-out-quart);
+  }
+
+  .link-underline {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+    transition: text-decoration-color 180ms var(--ease-out-quart);
+  }
+
+  details > summary {
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
