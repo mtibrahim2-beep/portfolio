@@ -71,7 +71,9 @@ const FIRST: Scenario = [
 const STEP_MS = 650;
 const STORE_KEY = "recon:last-duration";
 
-type Result = { ms: number; assisted: boolean };
+type Result = { ms: number };
+type Scope = "global" | "local";
+const API = "/api/recon";
 
 /** 7.4 s, or 1 min 05.2 s once past a minute. */
 const duration = (ms: number) => {
@@ -84,12 +86,24 @@ const duration = (ms: number) => {
 // Read the clock outside render; called only from event handlers and effects.
 const now = () => performance.now();
 
+/** The most recent time from any visitor, or null when the shared store isn't available. */
+async function fetchGlobal(): Promise<Result | null | undefined> {
+  try {
+    const res = await fetch(API, { cache: "no-store" });
+    const data = (await res.json()) as { enabled: boolean; last: Result | null };
+    if (!data.enabled) return undefined;
+    return data.last ? { ms: data.last.ms } : null;
+  } catch {
+    return undefined;
+  }
+}
+
 function readSaved(): Result | null {
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const r = JSON.parse(raw) as Result;
-    return typeof r.ms === "number" ? r : null;
+    return typeof r.ms === "number" ? { ms: r.ms } : null;
   } catch {
     return null;
   }
@@ -306,7 +320,7 @@ export function ReconciliationPanel() {
   const [lastRecon, setLastRecon] = useState<Result | null>(null);
   // The clock starts on the first tick and stops when the statement balances.
   const startedAt = useRef<number | null>(null);
-  const assisted = useRef(false);
+  const [scope, setScope] = useState<Scope>("local");
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const timers = useRef<number[]>([]);
@@ -316,11 +330,27 @@ export function ReconciliationPanel() {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  // A returning visitor sees how long their last reconciliation took. Storage may be blocked.
+  // Show the latest time from any visitor, refreshed every 30 seconds. If the shared store is
+  // unavailable, fall back to this visitor's own last time from browser storage.
   useEffect(() => {
-    const saved = readSaved();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (saved) setLastRecon(saved);
+    let alive = true;
+    const load = async () => {
+      const global = await fetchGlobal();
+      if (!alive) return;
+      if (global === undefined) {
+        setScope("local");
+        setLastRecon((prev) => prev ?? readSaved());
+      } else {
+        setScope("global");
+        if (global) setLastRecon(global);
+      }
+    };
+    load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
   }, []);
 
   // Live clock while a reconciliation is in progress.
@@ -335,14 +365,12 @@ export function ReconciliationPanel() {
   const startClock = () => {
     if (startedAt.current !== null) return;
     startedAt.current = now();
-    assisted.current = false;
     setElapsed(0);
     setRunning(true);
   };
 
   const stopClock = () => {
     startedAt.current = null;
-    assisted.current = false;
     setRunning(false);
     setElapsed(0);
   };
@@ -354,13 +382,21 @@ export function ReconciliationPanel() {
   useEffect(() => {
     if (!balanced) return;
     if (startedAt.current !== null) {
-      const result = { ms: performance.now() - startedAt.current, assisted: assisted.current };
+      // Only a visitor's own solve is timed; Show me clears the clock before it runs.
+      const result = { ms: Math.round(performance.now() - startedAt.current) };
       startedAt.current = null;
       setRunning(false);
       setLastRecon(result);
       try {
         window.localStorage.setItem(STORE_KEY, JSON.stringify(result));
       } catch {}
+      fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result),
+      })
+        .then((res) => setScope(res.ok || res.status === 429 ? "global" : "local"))
+        .catch(() => setScope("local"));
     }
     if (prefersReducedMotion()) return;
     const canvas = canvasRef.current;
@@ -418,8 +454,7 @@ export function ReconciliationPanel() {
   const solve = () => {
     clearTimers();
     setTouched(true);
-    startClock();
-    assisted.current = true;
+    stopClock(); // Show me is a demo, so it never records a time.
     const order = items.filter((i) => i.kind === "adjustment");
     const finalBank = totals(items, new Set(order.map((i) => i.id))).bank;
     if (prefersReducedMotion()) {
@@ -570,9 +605,8 @@ export function ReconciliationPanel() {
           </>
         ) : (
           <>
-            Last reconciliation took:{" "}
+            {scope === "global" ? "Last reconciliation by any visitor took: " : "Your last reconciliation took: "}
             <span className="figure text-on-ink">{lastRecon ? duration(lastRecon.ms) : "not yet timed"}</span>
-            {lastRecon?.assisted ? " (with Show me)" : ""}
           </>
         )}
       </p>
