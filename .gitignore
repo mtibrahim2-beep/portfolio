@@ -42,3 +42,5 @@ next-env.d.ts
 
 # original CV (a copy is served from public/)
 /CV_Mohammad_Tauhid_Ibrahim_.pdf
+.vercel
+.env*

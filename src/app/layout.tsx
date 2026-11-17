@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { person } from "@/content/profile";
+import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const bodoni = Bodoni_Moda({
@@ -22,10 +23,6 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
   display: "swap",
 });
-
-const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : "http://localhost:3000";
 
 const description =
   "Mohammad Tauhid Ibrahim is a finance professional in Dhaka working across financial reporting, MIS, investor reporting and financial operations at WeGro Technologies.";
