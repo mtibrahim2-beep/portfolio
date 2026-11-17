@@ -12,7 +12,7 @@ export function Hero() {
           </h1>
           <p className="mt-1 max-w-md text-base text-on-ink-muted">{hero.focus}</p>
 
-          <p className="display mt-10 text-[2.75rem] text-on-ink sm:text-[3.75rem] lg:text-[4.5rem] xl:text-[4.875rem]">
+          <p className="display mt-10 text-[2.5rem] text-on-ink sm:text-[3.25rem] lg:text-[3.875rem] xl:text-[4.25rem]">
             <span className="block">{hero.headline[0]}</span>
             <span className="block sm:pl-[1.1em]">{hero.headline[1]}</span>
           </p>

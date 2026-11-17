@@ -8,7 +8,7 @@ export function Philosophy() {
           How I think about finance
         </h2>
         <blockquote className="lg:ml-[33.333%] lg:pl-8">
-          <p className="display max-w-[26ch] text-[2rem] text-ink sm:text-[2.5rem] lg:text-[2.875rem]">
+          <p className="display max-w-[28ch] text-[1.75rem] text-ink sm:text-[2.25rem] lg:text-[2.5rem]">
             {philosophy.statement}
           </p>
           <p className="mt-8 max-w-[56ch] text-lg text-graphite">{philosophy.support}</p>

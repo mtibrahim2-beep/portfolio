@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Bodoni_Moda, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
 import { person } from "@/content/profile";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
-const bodoni = Bodoni_Moda({
-  variable: "--font-bodoni",
+const plexSerif = IBM_Plex_Serif({
+  variable: "--font-plex-serif",
   subsets: ["latin"],
-  axes: ["opsz"],
+  weight: ["500", "600"],
   display: "swap",
 });
 
@@ -56,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${bodoni.variable} ${plexSans.variable} ${plexMono.variable} antialiased`}
+      className={`${plexSerif.variable} ${plexSans.variable} ${plexMono.variable} antialiased`}
     >
       <body>{children}</body>
     </html>

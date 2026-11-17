@@ -22,7 +22,7 @@ export function Section({ id, title, note, tone = "light", children }: Props) {
           <div className="lg:sticky lg:top-28">
             <h2
               id={`${id}-title`}
-              className={`display text-[2.5rem] md:text-[3.25rem] ${ink ? "text-on-ink" : "text-ink"}`}
+              className={`display text-[2.25rem] md:text-[2.875rem] ${ink ? "text-on-ink" : "text-ink"}`}
             >
               {title}
             </h2>

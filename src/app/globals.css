@@ -20,7 +20,7 @@
   --color-on-ink: #ece8dd;
   --color-on-ink-muted: #a3adbd;
 
-  --font-display: var(--font-bodoni), "Didot", "Bodoni 72", Georgia, serif;
+  --font-display: var(--font-plex-serif), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-plex-sans), "Segoe UI", system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Mono", monospace;
 
@@ -78,10 +78,9 @@
 
   .display {
     font-family: var(--font-display);
-    font-optical-sizing: auto;
     font-weight: 500;
-    letter-spacing: -0.01em;
-    line-height: 1.04;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
   }
 
   /* Accounting convention: a total sits on a single rule and closes with a double rule. */

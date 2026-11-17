@@ -33,6 +33,6 @@ Overridden, with reasons:
 | loss-bright | #E08A78 | negative figures on dark | 5.99 (on ink-2) |
 
 ## Type
-- Display: Bodoni Moda, used at 40px and above only, because its hairlines break up at small sizes.
+- Display: IBM Plex Serif 500. It replaced Bodoni Moda (Nov 2026), whose hairline strokes were hard to read on navy. Plex Serif comes from the `--domain typography` "Financial Trust" (IBM Plex) family, so it matches the body and figure faces.
 - Body: IBM Plex Sans 17px, line-height 1.6, max 68ch.
 - Figures: IBM Plex Mono with `font-variant-numeric: tabular-nums`, used only on real numbers.

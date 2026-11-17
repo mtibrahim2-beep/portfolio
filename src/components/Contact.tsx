@@ -13,7 +13,7 @@ export function Contact() {
     <section id="contact" aria-labelledby="contact-title" className="on-ink bg-ink text-on-ink">
       <div className="mx-auto grid max-w-[1240px] grid-cols-1 gap-12 px-4 py-20 sm:px-8 md:py-28 lg:grid-cols-12 lg:gap-8">
         <div className="lg:col-span-5">
-          <h2 id="contact-title" className="display text-[2.75rem] md:text-[4rem]">
+          <h2 id="contact-title" className="display text-[2.5rem] md:text-[3.5rem]">
             Contact
           </h2>
           <p className="mt-5 max-w-[40ch] text-on-ink-muted">
