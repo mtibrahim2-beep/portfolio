@@ -1,122 +1,384 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, RotateCcw, Shuffle, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/hooks/useInView";
 
 /*
- * A sample bank reconciliation. Every figure is illustrative, not company data.
- * Adjusted bank = 1,284,600 + 250,000 − 84,500 = 1,450,100
- * Adjusted book = 1,452,350 − 1,150 − 1,100   = 1,450,100
- * Each adjustment that posts moves the difference closer to zero.
+ * An interactive sample bank reconciliation. Every figure is illustrative, not company data.
+ * The visitor ticks the items that explain the gap between bank and book; one item per
+ * scenario is a decoy that is already on both records. Difference = adjusted book − adjusted bank.
  */
-type Line = { label: string; amount: number; side: "bank" | "book"; kind: "opening" | "adjustment" };
+type Side = "bank" | "book";
+type Item = {
+  id: string;
+  label: string;
+  amount: number;
+  side: Side;
+  kind: "opening" | "adjustment" | "decoy";
+  why: string;
+};
+type Scenario = Item[];
 
-const LINES: Line[] = [
-  { label: "Balance per bank statement", amount: 1_284_600, side: "bank", kind: "opening" },
-  { label: "Add: deposit in transit", amount: 250_000, side: "bank", kind: "adjustment" },
-  { label: "Less: cheque 4471 not yet presented", amount: -84_500, side: "bank", kind: "adjustment" },
-  { label: "Balance per cash book", amount: 1_452_350, side: "book", kind: "opening" },
-  { label: "Less: bank charges", amount: -1_150, side: "book", kind: "adjustment" },
-  { label: "Less: direct debit not yet recorded", amount: -1_100, side: "book", kind: "adjustment" },
+// First scenario is fixed so server and client markup match.
+// Adjusted bank = 1,284,600 + 250,000 − 84,500 = 1,450,100
+// Adjusted book = 1,452,350 − 1,150 − 1,100   = 1,450,100
+const FIRST: Scenario = [
+  { id: "b0", side: "bank", kind: "opening", amount: 1_284_600, label: "Balance per bank statement", why: "" },
+  {
+    id: "b1",
+    side: "bank",
+    kind: "adjustment",
+    amount: 250_000,
+    label: "Add: deposit in transit",
+    why: "Banked on the last day. The bank credits it next period, so the statement is short by this much.",
+  },
+  {
+    id: "bx",
+    side: "bank",
+    kind: "decoy",
+    amount: -62_000,
+    label: "Less: cheque 4468, cleared",
+    why: "Cheque 4468 has already cleared, so it sits on both records and doesn't explain the gap.",
+  },
+  {
+    id: "b2",
+    side: "bank",
+    kind: "adjustment",
+    amount: -84_500,
+    label: "Less: cheque 4471 not yet presented",
+    why: "Written and recorded in the books, but the payee hasn't cashed it yet.",
+  },
+  { id: "k0", side: "book", kind: "opening", amount: 1_452_350, label: "Balance per cash book", why: "" },
+  {
+    id: "k1",
+    side: "book",
+    kind: "adjustment",
+    amount: -1_150,
+    label: "Less: bank charges",
+    why: "The bank deducted its fees, and we only learn the amount from the statement.",
+  },
+  {
+    id: "k2",
+    side: "book",
+    kind: "adjustment",
+    amount: -1_100,
+    label: "Less: direct debit not yet recorded",
+    why: "A standing payment left the account but hasn't been entered in the cash book yet.",
+  },
 ];
 
-// Order in which adjustments post during the sequence (indexes into LINES).
-const POST_ORDER = [1, 2, 4, 5];
-const STEP_MS = 900;
-const START_DELAY_MS = 700;
+const STEP_MS = 650;
 
 const fmt = (n: number) => {
   const s = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return n < 0 ? `(${s})` : s;
 };
 
-function totals(posted: Set<number>) {
+const between = (min: number, max: number, step: number) =>
+  Math.round((min + Math.random() * (max - min)) / step) * step;
+
+function shuffle<T>(xs: T[]): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Builds a fresh scenario whose correct adjustments always balance to zero. */
+function makeScenario(): Scenario {
+  const chqNo = between(4100, 4900, 1);
+  const bankOpen = between(900_000, 1_700_000, 100);
+  const dit = between(80_000, 320_000, 1000);
+  const chq = between(25_000, 140_000, 500);
+  const charges = between(400, 2_500, 50);
+  const interest = Math.random() < 0.5;
+  const second = interest ? between(1_500, 9_000, 50) : -between(800, 6_000, 50);
+
+  const bankAdj: Item[] = [
+    {
+      id: "b1",
+      side: "bank",
+      kind: "adjustment",
+      amount: dit,
+      label: "Add: deposit in transit",
+      why: "Banked on the last day. The bank credits it next period, so the statement is short by this much.",
+    },
+    {
+      id: "b2",
+      side: "bank",
+      kind: "adjustment",
+      amount: -chq,
+      label: `Less: cheque ${chqNo} not yet presented`,
+      why: "Written and recorded in the books, but the payee hasn't cashed it yet.",
+    },
+  ];
+  const bookAdj: Item[] = [
+    {
+      id: "k1",
+      side: "book",
+      kind: "adjustment",
+      amount: -charges,
+      label: "Less: bank charges",
+      why: "The bank deducted its fees, and we only learn the amount from the statement.",
+    },
+    interest
+      ? {
+          id: "k2",
+          side: "book",
+          kind: "adjustment",
+          amount: second,
+          label: "Add: interest credited by bank",
+          why: "The bank paid interest into the account. It appears on the statement before it reaches the books.",
+        }
+      : {
+          id: "k2",
+          side: "book",
+          kind: "adjustment",
+          amount: second,
+          label: "Less: direct debit not yet recorded",
+          why: "A standing payment left the account but hasn't been entered in the cash book yet.",
+        },
+  ];
+
+  const decoyOnBank = Math.random() < 0.5;
+  const decoy: Item = decoyOnBank
+    ? {
+        id: "bx",
+        side: "bank",
+        kind: "decoy",
+        amount: -between(20_000, 90_000, 500),
+        label: `Less: cheque ${chqNo - between(3, 12, 1)}, cleared`,
+        why: "That cheque has already cleared, so it sits on both records and doesn't explain the gap.",
+      }
+    : {
+        id: "kx",
+        side: "book",
+        kind: "decoy",
+        amount: between(15_000, 80_000, 500),
+        label: "Add: customer deposit, already credited",
+        why: "The bank and the books both show this deposit, so it isn't a reconciling item.",
+      };
+
+  const adjustedBank = bankOpen + dit - chq;
+  const bookOpen = adjustedBank - bookAdj.reduce((s, i) => s + i.amount, 0);
+
+  const bankItems = shuffle(decoyOnBank ? [...bankAdj, decoy] : bankAdj);
+  const bookItems = shuffle(decoyOnBank ? bookAdj : [...bookAdj, decoy]);
+  return [
+    { id: "b0", side: "bank", kind: "opening", amount: bankOpen, label: "Balance per bank statement", why: "" },
+    ...bankItems,
+    { id: "k0", side: "book", kind: "opening", amount: bookOpen, label: "Balance per cash book", why: "" },
+    ...bookItems,
+  ];
+}
+
+function totals(items: Scenario, posted: Set<string>) {
   let bank = 0;
   let book = 0;
-  LINES.forEach((l, i) => {
-    if (l.kind === "opening" || posted.has(i)) {
-      if (l.side === "bank") bank += l.amount;
-      else book += l.amount;
-    }
-  });
+  for (const i of items) {
+    if (i.kind !== "opening" && !posted.has(i.id)) continue;
+    if (i.side === "bank") bank += i.amount;
+    else book += i.amount;
+  }
   return { bank, book, diff: book - bank };
 }
 
-const ALL_POSTED = new Set(POST_ORDER);
+/** Eases a displayed number toward its target so the difference visibly moves. */
+function useTween(target: number, ms = 450) {
+  const [shown, setShown] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      from.current = target;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShown(target);
+      return;
+    }
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / ms);
+      const e = 1 - Math.pow(1 - p, 4);
+      const v = Math.round((a + (target - a) * e) * 100) / 100;
+      from.current = v;
+      setShown(v);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return shown;
+}
 
 export function ReconciliationPanel() {
-  // Server render shows the finished, balanced statement. The client replays the sequence once.
-  const [posted, setPosted] = useState<Set<number>>(ALL_POSTED);
+  const [items, setItems] = useState<Scenario>(FIRST);
+  const [posted, setPosted] = useState<Set<string>>(new Set());
+  const [note, setNote] = useState<{ text: string; tone: "good" | "bad" | "plain" }>({
+    text: "Tick the items that explain the difference. One of them is a decoy.",
+    tone: "plain",
+  });
+  const [touched, setTouched] = useState(false);
+  const [solving, setSolving] = useState(false);
+  const timers = useRef<number[]>([]);
 
-  useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const timers: number[] = [];
-    timers.push(window.setTimeout(() => setPosted(new Set()), 0));
-    POST_ORDER.forEach((lineIndex, step) => {
-      timers.push(
-        window.setTimeout(
-          () => setPosted((prev) => new Set(prev).add(lineIndex)),
-          START_DELAY_MS + STEP_MS * (step + 1),
-        ),
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  const { bank, book, diff } = totals(items, posted);
+  const balanced = diff === 0;
+  const shownDiff = useTween(diff);
+  const adjustments = items.filter((i) => i.kind === "adjustment");
+  const firstHint = adjustments[0]?.id;
+
+  const toggle = (item: Item) => {
+    setTouched(true);
+    const next = new Set(posted);
+    const adding = !next.has(item.id);
+    if (adding) next.add(item.id);
+    else next.delete(item.id);
+    setPosted(next);
+
+    const after = totals(items, next).diff;
+    if (after === 0) {
+      setNote({ text: `Reconciled. Both sides agree at ${fmt(totals(items, next).bank)}.`, tone: "good" });
+    } else if (!adding) {
+      setNote({ text: "Removed. Difference updated.", tone: "plain" });
+    } else if (item.kind === "decoy") {
+      setNote({ text: `Not this one. ${item.why}`, tone: "bad" });
+    } else {
+      setNote({ text: item.why, tone: "plain" });
+    }
+  };
+
+  const clearTimers = () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+    setSolving(false);
+  };
+
+  const reset = (next?: Scenario) => {
+    clearTimers();
+    if (next) setItems(next);
+    setPosted(new Set());
+    setNote({
+      text: next
+        ? "New figures. Tick the items that explain the difference."
+        : "Tick the items that explain the difference. One of them is a decoy.",
+      tone: "plain",
+    });
+  };
+
+  const solve = () => {
+    clearTimers();
+    setTouched(true);
+    const order = items.filter((i) => i.kind === "adjustment");
+    const finalBank = totals(items, new Set(order.map((i) => i.id))).bank;
+    if (prefersReducedMotion()) {
+      setPosted(new Set(order.map((i) => i.id)));
+      setNote({ text: `Reconciled. Both sides agree at ${fmt(finalBank)}.`, tone: "good" });
+      return;
+    }
+    setSolving(true);
+    setPosted(new Set());
+    setNote({ text: "Posting each reconciling item in turn…", tone: "plain" });
+    order.forEach((item, step) => {
+      timers.current.push(
+        window.setTimeout(() => {
+          setPosted((prev) => new Set(prev).add(item.id));
+          setNote({ text: item.why, tone: "plain" });
+        }, STEP_MS * (step + 1)),
       );
     });
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, []);
+    timers.current.push(
+      window.setTimeout(() => {
+        setSolving(false);
+        setNote({ text: `Reconciled. The decoy stays unticked. Both sides agree at ${fmt(finalBank)}.`, tone: "good" });
+      }, STEP_MS * (order.length + 1)),
+    );
+  };
 
-  const { bank, book, diff } = totals(posted);
-  const balanced = diff === 0;
-
-  const block = (side: "bank" | "book", heading: string, adjusted: number) => (
+  const block = (side: Side, heading: string, adjusted: number) => (
     <div>
-      <p className="mb-2 text-sm text-on-ink-muted">{heading}</p>
+      <p className="mb-1 text-sm text-on-ink-muted">{heading}</p>
       <ul>
-        {LINES.map((l, i) => {
+        {items.map((l) => {
           if (l.side !== side) return null;
-          const isPosted = l.kind === "opening" || posted.has(i);
-          return (
-            <li
-              key={l.label}
-              className={`flex items-start justify-between gap-4 py-1.5 text-sm transition-opacity duration-500 ${
-                isPosted ? "opacity-100" : "opacity-35"
-              }`}
-            >
-              <span className="flex min-w-0 items-start gap-2">
-                <span className="mt-[3px] inline-flex w-4 shrink-0 justify-center text-emerald-bright" aria-hidden="true">
-                  {l.kind === "adjustment" && isPosted ? <Check size={14} strokeWidth={2.5} /> : null}
-                </span>
+          if (l.kind === "opening") {
+            return (
+              <li key={l.id} className="flex items-start justify-between gap-4 py-2 pl-7 text-sm">
                 <span className="min-w-0">{l.label}</span>
-              </span>
-              <span className={`figure shrink-0 ${l.amount < 0 ? "text-loss-bright" : "text-on-ink"}`}>
-                {fmt(l.amount)}
-              </span>
+                <span className="figure shrink-0 text-on-ink">{fmt(l.amount)}</span>
+              </li>
+            );
+          }
+          const on = posted.has(l.id);
+          const wrong = on && l.kind === "decoy";
+          return (
+            <li key={l.id}>
+              <button
+                type="button"
+                aria-pressed={on}
+                disabled={solving}
+                onClick={() => toggle(l)}
+                className={`group -mx-2 flex min-h-11 w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-4 rounded-[2px] px-2 py-1.5 text-left text-sm transition-colors duration-200 hover:bg-ink-line/50 disabled:cursor-default ${
+                  !touched && l.id === firstHint ? "recon-nudge" : ""
+                } ${wrong ? "bg-loss-bright/10" : ""}`}
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex size-4 shrink-0 items-center justify-center rounded-[2px] border transition-colors duration-200 ${
+                      on
+                        ? wrong
+                          ? "border-loss-bright bg-loss-bright text-ink"
+                          : "border-emerald-bright bg-emerald-bright text-ink"
+                        : "border-on-ink-muted/70 group-hover:border-on-ink"
+                    }`}
+                  >
+                    {on ? <Check size={12} strokeWidth={3} /> : null}
+                  </span>
+                  <span className={`min-w-0 transition-opacity duration-200 ${on ? "opacity-100" : "opacity-70"}`}>
+                    {l.label}
+                  </span>
+                </span>
+                <span
+                  className={`figure shrink-0 transition-opacity duration-200 ${on ? "opacity-100" : "opacity-60"} ${
+                    l.amount < 0 ? "text-loss-bright" : "text-on-ink"
+                  }`}
+                >
+                  {fmt(l.amount)}
+                </span>
+              </button>
             </li>
           );
         })}
       </ul>
-      <div className="mt-1 flex items-baseline justify-between gap-4 pl-6 text-sm">
+      <div className="mt-1 flex items-baseline justify-between gap-4 pl-7 text-sm">
         <span className="font-medium text-on-ink">Adjusted balance</span>
         <span className="figure total-rule px-1 text-gold">{fmt(adjusted)}</span>
       </div>
     </div>
   );
 
+  const control =
+    "inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-[2px] px-2 text-sm text-on-ink-muted transition-colors duration-200 hover:text-on-ink disabled:cursor-default disabled:opacity-50";
+
   return (
     <figure className="relative rounded-[3px] border border-ink-line bg-ink-2/80 p-5 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.6)] sm:p-7">
-      <figcaption className="mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="font-medium text-on-ink">Bank reconciliation</span>
-        <span className="text-sm text-on-ink-muted">Sample figures in BDT, for illustration</span>
+      <figcaption className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="font-medium text-on-ink">Try a bank reconciliation</span>
+        <span className="text-sm text-on-ink-muted">Sample figures in BDT</span>
       </figcaption>
 
-      <div aria-hidden="true" className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-5">
         {block("bank", "Bank side", bank)}
         {block("book", "Book side", book)}
       </div>
 
-      <div
-        aria-hidden="true"
-        className="mt-7 flex items-end justify-between gap-4 border-t border-ink-line pt-5"
-      >
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-t border-ink-line pt-5">
         <div>
           <p className="text-sm text-on-ink-muted">Difference</p>
           <p
@@ -124,7 +386,7 @@ export function ReconciliationPanel() {
               balanced ? "text-emerald-bright" : "text-on-ink"
             }`}
           >
-            {fmt(diff)}
+            {fmt(shownDiff)}
           </p>
         </div>
         <p
@@ -132,15 +394,31 @@ export function ReconciliationPanel() {
             balanced ? "border-emerald-bright/60 text-emerald-bright" : "border-ink-line text-on-ink-muted"
           }`}
         >
-          {balanced ? <Check size={14} strokeWidth={2.5} /> : null}
+          {balanced ? <Check size={14} strokeWidth={2.5} aria-hidden="true" /> : null}
           {balanced ? "Reconciled" : "Unreconciled"}
         </p>
       </div>
 
-      <p className="sr-only">
-        Sample bank reconciliation with illustrative figures. Adjusted bank balance 1,450,100.00 and adjusted book
-        balance 1,450,100.00, so the difference is zero and the account is reconciled.
+      <p
+        aria-live="polite"
+        className={`mt-4 min-h-[3em] text-sm leading-snug ${
+          note.tone === "good" ? "text-emerald-bright" : note.tone === "bad" ? "text-loss-bright" : "text-on-ink-muted"
+        }`}
+      >
+        {note.text}
       </p>
+
+      <div className="-mx-2 mt-2 flex flex-wrap gap-x-2">
+        <button type="button" className={control} onClick={solve} disabled={solving}>
+          <Sparkles size={14} aria-hidden="true" /> Show me
+        </button>
+        <button type="button" className={control} onClick={() => reset(makeScenario())} disabled={solving}>
+          <Shuffle size={14} aria-hidden="true" /> New figures
+        </button>
+        <button type="button" className={control} onClick={() => reset()}>
+          <RotateCcw size={14} aria-hidden="true" /> Reset
+        </button>
+      </div>
     </figure>
   );
 }
