@@ -4,6 +4,7 @@ import { Contact } from "@/components/Contact";
 import { Education } from "@/components/Education";
 import { Experience } from "@/components/Experience";
 import { Expertise } from "@/components/Expertise";
+import { Leadership } from "@/components/Leadership";
 import { Hero } from "@/components/Hero";
 import { Nav } from "@/components/Nav";
 import { Numbers } from "@/components/Numbers";
@@ -42,6 +43,7 @@ export default function Home() {
         <Numbers />
         <Tools />
         <Education />
+        <Leadership />
         <Philosophy />
         <Contact />
       </main>

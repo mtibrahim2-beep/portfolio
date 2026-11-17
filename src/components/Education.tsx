@@ -1,10 +1,10 @@
-import { education, leadership } from "@/content/profile";
+import { education } from "@/content/profile";
 import { Section } from "./Section";
 
 export function Education() {
   const [degree, ...school] = education;
   return (
-    <Section id="education" title="Education and leadership">
+    <Section id="education" title="Education">
       <article className="border-t border-ink/80 pt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h3 className="text-[1.5rem] font-semibold leading-snug text-ink">{degree.title}</h3>
@@ -44,18 +44,6 @@ export function Education() {
         ))}
       </ul>
 
-      <h3 className="mt-16 border-b border-ink/80 pb-2 text-[1.25rem] font-semibold text-ink">Beyond the classroom</h3>
-      <ul className="divide-y divide-rule">
-        {leadership.map((l) => (
-          <li key={l.title} className="grid gap-1 py-5 sm:grid-cols-[minmax(0,15rem)_1fr] sm:gap-8">
-            <div>
-              <p className="font-semibold text-ink">{l.title}</p>
-              {l.period ? <p className="figure text-sm text-muted">{l.period}</p> : null}
-            </div>
-            <p className="max-w-[58ch] text-[0.9875rem] leading-relaxed">{l.detail}</p>
-          </li>
-        ))}
-      </ul>
     </Section>
   );
 }
