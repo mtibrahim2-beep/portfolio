@@ -219,12 +219,22 @@ export const expertise = [
   },
 ];
 
-export const metrics = [
+export type Metric = { value: number; suffix: string; decimals: number; label: string; text?: string };
+
+// `text` shows a word instead of a counted number, for achievements the CV states without a figure.
+export const metrics: Metric[] = [
   { value: 25, suffix: "%", decimals: 0, label: "less time to prepare financial reports, after redesigning the MIS workflow" },
   { value: 95, suffix: "%", decimals: 0, label: "of internal reporting deadlines met as Senior Associate" },
   { value: 4, suffix: "", decimals: 0, label: "finance roles at WeGro Technologies since October 2024" },
   { value: 3.71, suffix: "", decimals: 2, label: "CGPA, BBA in Accounting & Information Systems" },
   { value: 5000, suffix: "+", decimals: 0, label: "participants at Josephite Math Mania 2019, which I co-organised" },
+  {
+    value: 0,
+    suffix: "",
+    decimals: 0,
+    text: "TEDxBUP",
+    label: "co-organised in 2024: speakers, venue, sponsors, volunteers and the day itself",
+  },
 ];
 
 export const tools = [

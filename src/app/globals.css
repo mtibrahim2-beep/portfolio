@@ -89,6 +89,18 @@
     border-bottom: 3px double currentColor;
   }
 
+  /* Part-time roles in the tenure chart: hatched and outlined, so full-time roles read as solid. */
+  .part-time-bar {
+    border: 1px solid rgb(163 173 189 / 0.7);
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgb(163 173 189 / 0.45) 0,
+      rgb(163 173 189 / 0.45) 2px,
+      transparent 2px,
+      transparent 7px
+    );
+  }
+
   /* Faint ledger ruling for the hero background. */
   .ledger-ruling {
     background-image: repeating-linear-gradient(

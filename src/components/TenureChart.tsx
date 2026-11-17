@@ -29,9 +29,25 @@ export function TenureChart({ builtAt }: { builtAt: string }) {
 
   return (
     <figure className="mt-16">
-      <figcaption className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-medium text-on-ink">Time in each role</span>
-        <span className="text-sm text-on-ink-muted">Months, October 2024 to today</span>
+      <figcaption>
+        <span className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="font-medium text-on-ink">Time in each role</span>
+          <span className="text-sm text-on-ink-muted">Months, October 2024 to today</span>
+        </span>
+        <span className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-on-ink-muted">
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="h-3 w-6 rounded-[2px] bg-emerald-bright" />
+            Full-time, current
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="h-3 w-6 rounded-[2px] bg-gold" />
+            Full-time
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="part-time-bar h-3 w-6 rounded-[2px]" />
+            Part-time
+          </span>
+        </span>
       </figcaption>
 
       <div className="relative mt-6">
@@ -55,18 +71,23 @@ export function TenureChart({ builtAt }: { builtAt: string }) {
             const left = ((s - start) / span) * 100;
             const width = (months / span) * 100;
             const isCurrent = r.end === null;
+            const partTime = Boolean(r.type);
+            const bar = partTime ? "part-time-bar h-5" : isCurrent ? "bg-emerald-bright h-9" : "bg-gold h-9";
             return (
               <li key={r.title} className="relative">
-                <div className="h-8 w-full">
+                <div className="flex h-9 w-full items-center">
                   <div
                     aria-hidden="true"
-                    className={`absolute top-0 h-8 rounded-[2px] ${isCurrent ? "bg-emerald-bright" : "bg-gold/80"}`}
+                    className={`absolute rounded-[2px] ${bar}`}
                     style={{ left: `${left}%`, width: `${width}%` }}
                   />
                 </div>
                 <p className="mt-1 flex flex-wrap justify-between gap-x-4 text-sm">
-                  <span className="text-on-ink">{r.title}</span>
-                  <span className="figure text-on-ink-muted">
+                  <span className={partTime ? "text-on-ink-muted" : "font-semibold text-on-ink"}>
+                    {r.title}
+                    {partTime ? " (part-time)" : ""}
+                  </span>
+                  <span className={`figure ${partTime ? "text-on-ink-muted" : "text-on-ink"}`}>
                     {months} {months === 1 ? "month" : "months"}
                     {isCurrent ? ", ongoing" : ""}
                   </span>
