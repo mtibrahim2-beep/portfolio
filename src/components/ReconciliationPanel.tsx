@@ -69,17 +69,31 @@ const FIRST: Scenario = [
 ];
 
 const STEP_MS = 650;
-const STORE_KEY = "recon:last";
+const STORE_KEY = "recon:last-duration";
 
-const stamp = (d: Date) =>
-  d.toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+type Result = { ms: number; assisted: boolean };
+
+/** 7.4 s, or 1 min 05.2 s once past a minute. */
+const duration = (ms: number) => {
+  const total = ms / 1000;
+  if (total < 60) return `${total.toFixed(1)} s`;
+  const m = Math.floor(total / 60);
+  return `${m} min ${(total - m * 60).toFixed(1).padStart(4, "0")} s`;
+};
+
+// Read the clock outside render; called only from event handlers and effects.
+const now = () => performance.now();
+
+function readSaved(): Result | null {
+  try {
+    const raw = window.localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const r = JSON.parse(raw) as Result;
+    return typeof r.ms === "number" ? r : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A short confetti burst drawn on a canvas over the panel, fired from the given point. */
 function burst(canvas: HTMLCanvasElement, originX: number, originY: number) {
@@ -289,7 +303,12 @@ export function ReconciliationPanel() {
   });
   const [touched, setTouched] = useState(false);
   const [solving, setSolving] = useState(false);
-  const [lastRecon, setLastRecon] = useState<string | null>(null);
+  const [lastRecon, setLastRecon] = useState<Result | null>(null);
+  // The clock starts on the first tick and stops when the statement balances.
+  const startedAt = useRef<number | null>(null);
+  const assisted = useRef(false);
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const timers = useRef<number[]>([]);
   const figureRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -297,14 +316,36 @@ export function ReconciliationPanel() {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  // A returning visitor sees when they last reconciled. Storage may be blocked, so fail quietly.
+  // A returning visitor sees how long their last reconciliation took. Storage may be blocked.
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORE_KEY);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved) setLastRecon(saved);
-    } catch {}
+    const saved = readSaved();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setLastRecon(saved);
   }, []);
+
+  // Live clock while a reconciliation is in progress.
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => {
+      if (startedAt.current !== null) setElapsed(performance.now() - startedAt.current);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [running]);
+
+  const startClock = () => {
+    if (startedAt.current !== null) return;
+    startedAt.current = now();
+    assisted.current = false;
+    setElapsed(0);
+    setRunning(true);
+  };
+
+  const stopClock = () => {
+    startedAt.current = null;
+    assisted.current = false;
+    setRunning(false);
+    setElapsed(0);
+  };
 
   const { bank, book, diff } = totals(items, posted);
   const balanced = diff === 0;
@@ -312,12 +353,15 @@ export function ReconciliationPanel() {
   // Celebrate each time the statement moves into balance.
   useEffect(() => {
     if (!balanced) return;
-    const when = stamp(new Date());
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLastRecon(when);
-    try {
-      window.localStorage.setItem(STORE_KEY, when);
-    } catch {}
+    if (startedAt.current !== null) {
+      const result = { ms: performance.now() - startedAt.current, assisted: assisted.current };
+      startedAt.current = null;
+      setRunning(false);
+      setLastRecon(result);
+      try {
+        window.localStorage.setItem(STORE_KEY, JSON.stringify(result));
+      } catch {}
+    }
     if (prefersReducedMotion()) return;
     const canvas = canvasRef.current;
     const fig = figureRef.current;
@@ -333,6 +377,7 @@ export function ReconciliationPanel() {
 
   const toggle = (item: Item) => {
     setTouched(true);
+    startClock();
     const next = new Set(posted);
     const adding = !next.has(item.id);
     if (adding) next.add(item.id);
@@ -359,6 +404,7 @@ export function ReconciliationPanel() {
 
   const reset = (next?: Scenario) => {
     clearTimers();
+    stopClock();
     if (next) setItems(next);
     setPosted(new Set());
     setNote({
@@ -372,6 +418,8 @@ export function ReconciliationPanel() {
   const solve = () => {
     clearTimers();
     setTouched(true);
+    startClock();
+    assisted.current = true;
     const order = items.filter((i) => i.kind === "adjustment");
     const finalBank = totals(items, new Set(order.map((i) => i.id))).bank;
     if (prefersReducedMotion()) {
@@ -516,8 +564,17 @@ export function ReconciliationPanel() {
       </p>
 
       <p className="mt-1 text-xs text-on-ink-muted">
-        Last reconciled:{" "}
-        <span className="figure text-on-ink">{lastRecon ?? "not yet"}</span>
+        {running ? (
+          <>
+            Clock running: <span className="figure text-on-ink">{duration(elapsed)}</span>
+          </>
+        ) : (
+          <>
+            Last reconciliation took:{" "}
+            <span className="figure text-on-ink">{lastRecon ? duration(lastRecon.ms) : "not yet timed"}</span>
+            {lastRecon?.assisted ? " (with Show me)" : ""}
+          </>
+        )}
       </p>
 
       <div className="-mx-2 mt-2 flex flex-wrap gap-x-2">
