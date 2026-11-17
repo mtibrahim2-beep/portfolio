@@ -69,6 +69,72 @@ const FIRST: Scenario = [
 ];
 
 const STEP_MS = 650;
+const STORE_KEY = "recon:last";
+
+const stamp = (d: Date) =>
+  d.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+/** A short confetti burst drawn on a canvas over the panel, fired from the given point. */
+function burst(canvas: HTMLCanvasElement, originX: number, originY: number) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return () => {};
+  const dpr = window.devicePixelRatio || 1;
+  const { width, height } = canvas.getBoundingClientRect();
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.scale(dpr, dpr);
+  const colors = ["#c2a066", "#5db08f", "#ece8dd", "#e2c48f"];
+  const parts = Array.from({ length: 70 }, () => {
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
+    const speed = 4 + Math.random() * 6;
+    return {
+      x: originX,
+      y: originY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      w: 4 + Math.random() * 4,
+      h: 6 + Math.random() * 6,
+      r: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      c: colors[Math.floor(Math.random() * colors.length)],
+    };
+  });
+  const DURATION = 1800;
+  const t0 = performance.now();
+  let raf = 0;
+  const frame = (t: number) => {
+    const p = (t - t0) / DURATION;
+    ctx.clearRect(0, 0, width, height);
+    if (p >= 1) return;
+    ctx.globalAlpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+    for (const q of parts) {
+      q.vy += 0.22;
+      q.vx *= 0.985;
+      q.x += q.vx;
+      q.y += q.vy;
+      q.r += q.vr;
+      ctx.save();
+      ctx.translate(q.x, q.y);
+      ctx.rotate(q.r);
+      ctx.fillStyle = q.c;
+      ctx.fillRect(-q.w / 2, -q.h / 2, q.w, Math.cos(q.r * 2) * q.h);
+      ctx.restore();
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(raf);
+    ctx.clearRect(0, 0, width, height);
+  };
+}
 
 const fmt = (n: number) => {
   const s = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -223,12 +289,44 @@ export function ReconciliationPanel() {
   });
   const [touched, setTouched] = useState(false);
   const [solving, setSolving] = useState(false);
+  const [lastRecon, setLastRecon] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
+  const figureRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const badgeRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
+  // A returning visitor sees when they last reconciled. Storage may be blocked, so fail quietly.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setLastRecon(saved);
+    } catch {}
+  }, []);
+
   const { bank, book, diff } = totals(items, posted);
   const balanced = diff === 0;
+
+  // Celebrate each time the statement moves into balance.
+  useEffect(() => {
+    if (!balanced) return;
+    const when = stamp(new Date());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastRecon(when);
+    try {
+      window.localStorage.setItem(STORE_KEY, when);
+    } catch {}
+    if (prefersReducedMotion()) return;
+    const canvas = canvasRef.current;
+    const fig = figureRef.current;
+    const badge = badgeRef.current;
+    if (!canvas || !fig || !badge) return;
+    const f = fig.getBoundingClientRect();
+    const b = badge.getBoundingClientRect();
+    return burst(canvas, b.left - f.left + b.width / 2, b.top - f.top);
+  }, [balanced]);
   const shownDiff = useTween(diff);
   const adjustments = items.filter((i) => i.kind === "adjustment");
   const firstHint = adjustments[0]?.id;
@@ -367,7 +465,15 @@ export function ReconciliationPanel() {
     "inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-[2px] px-2 text-sm text-on-ink-muted transition-colors duration-200 hover:text-on-ink disabled:cursor-default disabled:opacity-50";
 
   return (
-    <figure className="relative rounded-[3px] border border-ink-line bg-ink-2/80 p-5 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.6)] sm:p-7">
+    <figure
+      ref={figureRef}
+      className="relative rounded-[3px] border border-ink-line bg-ink-2/80 p-5 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.6)] sm:p-7"
+    >
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-10 size-full"
+      />
       <figcaption className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <span className="font-medium text-on-ink">Try a bank reconciliation</span>
         <span className="text-sm text-on-ink-muted">Sample figures in BDT</span>
@@ -390,6 +496,7 @@ export function ReconciliationPanel() {
           </p>
         </div>
         <p
+          ref={badgeRef}
           className={`inline-flex items-center gap-1.5 rounded-[2px] border px-2.5 py-1 text-sm transition-colors duration-500 ${
             balanced ? "border-emerald-bright/60 text-emerald-bright" : "border-ink-line text-on-ink-muted"
           }`}
@@ -406,6 +513,11 @@ export function ReconciliationPanel() {
         }`}
       >
         {note.text}
+      </p>
+
+      <p className="mt-1 text-xs text-on-ink-muted">
+        Last reconciled:{" "}
+        <span className="figure text-on-ink">{lastRecon ?? "not yet"}</span>
       </p>
 
       <div className="-mx-2 mt-2 flex flex-wrap gap-x-2">
